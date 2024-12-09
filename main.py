@@ -1,6 +1,6 @@
 import json
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from authlib.integrations.starlette_client import OAuth
 from starlette.middleware.sessions import SessionMiddleware
@@ -37,16 +37,21 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.getenv('SECRET_KEY',
                                                            set_env.SECRET_KEY))
 
+
+
 # OAuth configuration
 # DFF also changed.
 # TODO Move back to environment variables.
 #
+print("Checkpoint 2")
 config = Config(environ={
     "GOOGLE_CLIENT_ID": set_env.GOOGLE_CLIENT_ID,
     "GOOGLE_CLIENT_SECRET": set_env.GOOGLE_CLIENT_SECRET
 })
 oauth = OAuth(config)
 
+
+print("Checkpoint 1")
 
 google = oauth.register(
     name='google',
@@ -97,6 +102,8 @@ def get_user_info(access_token):
     headers = {"Authorization": auth}
     rsp = requests.get(profile_url, headers=headers)
 
+    # print("rsp:",rsp)
+
     try:
         result = rsp.json()
     except Exception as e:
@@ -116,7 +123,7 @@ async def login(request: Request):
     redirect_uri = 'http://localhost:5001/oauth2/callback'  # The callback URL
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
-@app.get('/auth/callback')
+@app.get('/oauth2/callback')
 async def auth(request: Request):
     # Get the token and user info after user authorization
     try:
@@ -148,17 +155,30 @@ def logout(request: Request):
     return RedirectResponse(url='/')
 
 # Protected route for users
+def validate_token(token: str):
+    if token == "valid_token":
+        return {"id": 1, "username": "testuser"}
+    return None
+
 @app.get('/users')
 async def get_users(request: Request):
-    # Check if the user is logged in
-    user = request.session.get('user')
+    # Get token from the Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    
+    # Extract the token from the "Bearer <token>" format
+    token = auth_header.split("Bearer ")[-1]
+    
+    # Validate the token
+    user = validate_token(token)
     if not user:
-        raise HTTPException(status_code=401, detail="You are not logged in")
-
-    # Example response with a protected resource
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     return {"message": "Welcome, you are authenticated!", "user": user}
 
 # Run the application
 if __name__ == '__main__':
     import uvicorn
+    print("Checkpoint 3")
     uvicorn.run(app, host="localhost", port=5001)

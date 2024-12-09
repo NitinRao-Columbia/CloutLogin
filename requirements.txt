@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+authlib
+starlette
+python-dotenv
+requests
+pyjwt
+httpx
