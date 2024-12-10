@@ -1,5 +1,4 @@
 import json
-
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from authlib.integrations.starlette_client import OAuth
@@ -77,6 +76,36 @@ def get_response_html(profile):
     picture = profile["picture"]
     email = profile["email"]
 
+
+    names = name.split(" ", 1)
+    first_name = names[0]
+    last_name = names[1] if len(names) > 1 else ""
+
+    # Define the backend user creation endpoint
+    url = "http://3.145.144.209:8001/users"
+
+    # Create the payload expected by the create_user endpoint
+    payload = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email
+    }
+
+    # POST request to the user creation endpoint - create_user
+    try:
+        response = requests.post(url, json=payload)
+
+        if response.status_code == 201:
+            print("User created successfully!")
+            print("User Details:", response.json())
+        elif response.status_code == 400:
+            print("Error:", response.json()["detail"])
+        else:
+            print("Unexpected response:", response.status_code, response.text)
+    except requests.ConnectionError as e:
+        print("Connection Error:", e)
+
+
     html = f"""
     <!DOCTYPE html>
         <html lang="en">
@@ -102,7 +131,7 @@ def get_user_info(access_token):
     headers = {"Authorization": auth}
     rsp = requests.get(profile_url, headers=headers)
 
-    # print("rsp:",rsp)
+    print("rsp:",rsp)
 
     try:
         result = rsp.json()
