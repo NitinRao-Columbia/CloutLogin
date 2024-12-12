@@ -120,13 +120,17 @@ async def login(request: Request):
     state = "some_random_state"  # Generate a secure random state
     request.session['state'] = state  # Save it in session
     redirect_uri = 'http://localhost:5001/oauth2/callback'
+    print("Session State WITHIN Login:", request.session.get('state'))  # In `/login`
     return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
 
 
 @app.get('/oauth2/callback')
 async def auth(request: Request):
     # Verify the state matches
-    state = request.query_params.get("state")
+
+    print("Session State WITHIN Callback:", request.session.get('state'))  # In `/oauth2/callback
+
+    state = request._query_params.get("state")
     if state != request.session.get('state'):
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
@@ -140,7 +144,7 @@ async def auth(request: Request):
         if profile is None:
             raise HTTPException(status_code=400, detail="Failed to fetch user profile")
 
-        print("Full profile = \n", json.dumps(profile, indent=2))
+        #print("Full profile = \n", json.dumps(profile, indent=2))
 
         # Generate the response HTML with JWT token handling
 
@@ -164,7 +168,9 @@ async def auth(request: Request):
 
         # Create JWT token
         token = create_jwt(payload, expiration_minutes=60)
+        request.session['user_token'] = token
         print("JWT Token:", token)
+        
 
         # POST request to the user creation endpoint - create_user
         headers = {"Authorization": f"Bearer {token}"}
@@ -187,7 +193,7 @@ async def auth(request: Request):
                     
                     if get_response.status_code == 200:
                         existing_user = get_response.json()
-                        print("Existing User Details:", existing_user)
+                        #print("Existing User Details:", existing_user)
                         
                         # Optionally, you can regenerate a JWT token for the existing user
                         existing_user_token = create_jwt({
@@ -213,25 +219,9 @@ async def auth(request: Request):
                 print("Unexpected response:", response.status_code, response.text)
         except requests.ConnectionError as e:
             print("Connection Error:", e)
-
-        result_html = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Login Result</title>
-        </head>
-        <body>
-            <h1>Login Success!</h1>
-            Full name: {name}<br>
-            Email: {email}<br>
-            <br>
-            <a href="{picture}">Profile Picture</a>
-        </body>
-        </html>
-        """
-
-        return HTMLResponse(result_html)
+        print("REQUEST attributes:", vars(request))
+        print("HTTPBearer attributes:", vars(http_bearer))
+        return RedirectResponse(url=f"/protected")
     except Exception as e:
         print(f"Authentication Error: {e}")
         raise HTTPException(status_code=400, detail="Authentication failed")
@@ -249,9 +239,22 @@ def validate_token(token: str):
     return None
 
 @app.get('/protected')
-async def protected_route(user: dict = Depends(authenticate_user)):
-    """A route protected by JWT authentication."""
-    return {"message": "Welcome!", "user": user}
+async def protected_route(
+    request: Request, 
+    credentials: HTTPAuthorizationCredentials = Depends(http_bearer)
+):
+    token = credentials.credentials if credentials else request.session.get('user_token')
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing token")
+    
+    # Validate token
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return {"message": "Welcome!", "user": payload}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 @app.get('/users')
 async def get_users(request: Request):
