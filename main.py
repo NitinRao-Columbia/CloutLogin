@@ -239,11 +239,10 @@ def validate_token(token: str):
     return None
 
 @app.get('/protected')
-async def protected_route(
-    request: Request, 
-    credentials: HTTPAuthorizationCredentials = Depends(http_bearer)
-):
-    token = credentials.credentials if credentials else request.session.get('user_token')
+async def protected_route(request: Request):
+    # Check for the token from the session first, then fallback to Bearer token from Authorization header
+    token = request.session.get('user_token')
+    
     if not token:
         raise HTTPException(status_code=401, detail="Missing token")
     
