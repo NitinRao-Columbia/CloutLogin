@@ -77,6 +77,8 @@ async def login(request: Request):
         state=state
     )
 
+
+
 @app.get('/oauth2/callback')
 async def auth(request: Request):
     try:
@@ -93,8 +95,12 @@ async def auth(request: Request):
         # Get token
         token = await oauth.google.authorize_access_token(request)
         
+        
         # Get user info
         userinfo = await oauth.google.parse_id_token(request, token)
+
+
+        
         
         if not userinfo:
             raise HTTPException(status_code=400, detail="Failed to get user info")
@@ -105,14 +111,60 @@ async def auth(request: Request):
             "name": userinfo.get("name", ""),
             "email": userinfo["email"]
         })
+
+        name = userinfo.get("name")
+        email = userinfo["email"]
+
+        names = name.split(" ", 1)
+        first_name = names[0]
+        last_name = names[1] if len(names) > 1 else ""
         
-        # Redirect to frontend with token
+        # Define the backend user creation endpoint
+        url = "http://3.145.144.209:8001/users"
+
+        # Create the payload expected by the create_user endpoint
+        payload = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email
+        }
+
+        # POST request to the user creation endpoint - create_user
+        headers = {"Authorization": f"Bearer {jwt_token}"}
+        print(headers)
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            if response.status_code == 201:
+                print("User created successfully!")
+                print("User Details:", response.json())
+            elif response.status_code == 400:
+                print("Error:", response.json()["detail"])
+            elif response.status_code == 409:
+            # Handle existing user
+            # Option 1: Retrieve existing user details using the same JWT token
+                try:
+                    # Assuming there's a GET endpoint to fetch user by email
+                    get_user_url = f"http://3.145.144.209:8001/users/email/{payload['email']}"
+                    print("URL:",get_user_url)
+                    get_response = requests.get(get_user_url, headers=headers)
+
+                    if get_response.status_code == 200:
+                        existing_user = get_response.json()
+                        #print("Existing User Details:", existing_user)
+                    else:
+                        print("Failed to retrieve existing user details")
+
+                except Exception as e:
+                    print(f"Error handling existing user: {e}")
+            else:
+                print("Unexpected response:", response.status_code, response.text)
+        except requests.ConnectionError as e:
+            print("Connection Error:", e)
         frontend_url = f"http://localhost:5002/auth-callback?token={jwt_token}"
         return RedirectResponse(url=frontend_url)
-    
     except Exception as e:
-        print(f"Auth error: {str(e)}")  # Log the error
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Authentication Error: {e}")
+        raise HTTPException(status_code=400, detail="Authentication failed")
 
 @app.get("/verify-token")
 async def verify_token(request: Request):
