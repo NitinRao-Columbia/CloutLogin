@@ -180,6 +180,11 @@ async def verify_token(request: Request):
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return JSONResponse({"message": "Successfully logged out"})
 
 if __name__ == '__main__':
     import uvicorn
