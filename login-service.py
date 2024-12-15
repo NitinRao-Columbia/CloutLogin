@@ -15,7 +15,7 @@ import set_env
 
 app = FastAPI()
 
-# Add CORS middleware
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5002"],
@@ -24,14 +24,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Important: The secret key must be a sufficiently long random string
 app.add_middleware(
     SessionMiddleware,
     secret_key=set_env.SECRET_KEY,
     session_cookie="session",
     max_age=3600,  # 1 hour
     same_site="lax",
-    https_only=False  # Set to True in production
+    https_only=False 
 )
 
 # JWT settings
@@ -58,7 +57,6 @@ oauth.register(
 
 def create_jwt_token(data: dict):
     to_encode = data.copy()
-    # Updated to use timezone-aware datetime
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -89,7 +87,6 @@ async def auth(request: Request):
         if not state or not session_state or state != session_state:
             raise HTTPException(status_code=400, detail="Invalid state parameter")
         
-        # Clean up the state from session
         request.session.pop('oauth_state', None)
         
         # Get token
@@ -119,7 +116,6 @@ async def auth(request: Request):
         first_name = names[0]
         last_name = names[1] if len(names) > 1 else ""
         
-        # Define the backend user creation endpoint
         url = "http://3.145.144.209:8001/users"
 
         # Create the payload expected by the create_user endpoint
@@ -140,17 +136,13 @@ async def auth(request: Request):
             elif response.status_code == 400:
                 print("Error:", response.json()["detail"])
             elif response.status_code == 409:
-            # Handle existing user
-            # Option 1: Retrieve existing user details using the same JWT token
                 try:
-                    # Assuming there's a GET endpoint to fetch user by email
                     get_user_url = f"http://3.145.144.209:8001/users/email/{payload['email']}"
                     print("URL:",get_user_url)
                     get_response = requests.get(get_user_url, headers=headers)
 
                     if get_response.status_code == 200:
                         existing_user = get_response.json()
-                        #print("Existing User Details:", existing_user)
                     else:
                         print("Failed to retrieve existing user details")
 
